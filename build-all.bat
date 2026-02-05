@@ -5,41 +5,55 @@ echo Gigabot Remote Updater - Build All
 echo ============================================
 echo.
 
-REM Verificar que Go está instalado
+REM Verificar que Go esta instalado
 where go >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] Go no está instalado o no está en PATH
+    echo [ERROR] Go no esta instalado o no esta en PATH
     exit /b 1
 )
 
-echo [1/4] Compilando Deployer (Windows)...
-cd deployer
-go build -o ..\deployer.exe main.go
+echo [1/5] Compilando Deployer (Windows)...
+go build -o deployer.exe ./deployer/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando deployer
     exit /b 1
 )
-cd ..
 echo [OK] deployer.exe creado
 
 echo.
-echo [2/4] Compilando Nexo (VPS Windows)...
-cd nexo
-go build -o ..\nexo.exe main.go
+echo [2/5] Compilando Deployer (Mac M1/M2/M3/M4)...
+set GOOS=darwin
+set GOARCH=arm64
+set CGO_ENABLED=0
+go build -o deployer-mac ./deployer/main.go
+if %errorlevel% neq 0 (
+    echo [ERROR] Fallo compilando deployer-mac
+    exit /b 1
+)
+set GOOS=
+set GOARCH=
+set CGO_ENABLED=
+echo [OK] deployer-mac creado
+
+echo.
+echo [3/5] Compilando Nexo (VPS Windows)...
+go build -o nexo.exe ./nexo/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando nexo
     exit /b 1
 )
-cd ..
 echo [OK] nexo.exe creado
 
 echo.
-echo [3/4] Compilando Updater (Mac ARM64)...
-cd updater-mac
+echo [4/5] Compilando Updater (Mac ARM64)...
+if exist updater-mac\main (
+    del /F /Q updater-mac\main
+    rmdir updater-mac
+)
 set GOOS=darwin
 set GOARCH=arm64
 set CGO_ENABLED=0
-go build -o ..\updater-mac main.go
+go build -o updater-mac ./updater-mac/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando updater-mac
     exit /b 1
@@ -47,24 +61,18 @@ if %errorlevel% neq 0 (
 set GOOS=
 set GOARCH=
 set CGO_ENABLED=
-cd ..
 echo [OK] updater-mac creado (para Mac M1/M2/M3/M4)
 
 echo.
-echo [4/4] Generando claves Ed25519 (si no existen)...
+echo [5/5] Generando claves Ed25519 (si no existen)...
 if not exist deploy-private.key (
     echo Generando nuevo par de claves...
-    cd keys
-    go run genkeys.go
+    go run ./keys/genkeys.go
     if %errorlevel% neq 0 (
-        echo [AVISO] No se pudieron generar claves automáticamente
+        echo [AVISO] No se pudieron generar claves automaticamente
         echo Usa: openssl genpkey -algorithm Ed25519 -out deploy-private.key
         echo      openssl pkey -in deploy-private.key -pubout -out deploy-public.key
-    ) else (
-        copy deploy-private.key ..\
-        copy deploy-public.key ..\
     )
-    cd ..
 ) else (
     echo [OK] Claves ya existen
 )
@@ -75,16 +83,17 @@ echo BUILD COMPLETADO
 echo ============================================
 echo.
 echo Archivos generados:
-echo   - deployer.exe      (para subir desde Windows/Mac)
+echo   - deployer.exe      (para subir desde Windows)
+echo   - deployer-mac      (para subir desde Mac M1/M2/M3/M4)
 echo   - nexo.exe          (para instalar en VPS Windows)
 echo   - updater-mac       (para correr en Mac M4)
 echo   - deploy-private.key (clave privada - GUARDAR SEGURA)
-echo   - deploy-public.key  (clave pública - distribuir a VPS y Mac)
+echo   - deploy-public.key  (clave publica - distribuir a VPS y Mac)
 echo.
-echo Próximos pasos:
+echo Proximos pasos:
 echo 1. Copiar nexo.exe y deploy-public.key al VPS Windows
-echo 2. En VPS: .
-exo.exe (o instalar como servicio)
+echo 2. En VPS: .\nexo.exe (o instalar como servicio)
 echo 3. En Mac: ./updater-mac https://tu-vps:8443 deploy-public.key ./gigabot
 echo 4. Desde dev: .\deployer.exe https://tu-vps:8443 TOKEN deploy-private.key
 echo.
+pause
