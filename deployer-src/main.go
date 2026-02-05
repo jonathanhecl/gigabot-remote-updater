@@ -106,8 +106,11 @@ func run(config Config) error {
 	binaryPath := filepath.Join(config.ProjectPath, config.BinaryName)
 
 	// Ejecutar go build con cross-compilation
+	// Usar formato correcto para ldflags
+	ldflags := fmt.Sprintf("-X 'main.BuildTime=%s' -X 'main.Version=%s'", buildTime, version)
+
 	cmd := exec.Command("go", "build",
-		"-ldflags", fmt.Sprintf("-X main.BuildTime=%s -X main.Version=%s", buildTime, version),
+		"-ldflags", ldflags,
 		"-o", config.BinaryName,
 		config.MainPath)
 	cmd.Dir = config.ProjectPath
