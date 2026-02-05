@@ -5,7 +5,8 @@
 
 set -e
 
-GIGABOT_DIR="$HOME/gigabot"
+# Usar directorio actual (donde se ejecuta el script)
+GIGABOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VPS_HOST="${1:-https://tu-vps:8443}"
 PUBLIC_KEY="${2:-deploy-public.key}"
 GIGABOT_BIN="${3:-./gigabot}"
