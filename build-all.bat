@@ -13,7 +13,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [1/5] Compilando Deployer (Windows)...
-go build -o deployer.exe ./deployer/main.go
+go build -o deployer.exe ./deployer-src/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando deployer
     exit /b 1
@@ -25,7 +25,7 @@ echo [2/5] Compilando Deployer (Mac M1/M2/M3/M4)...
 set GOOS=darwin
 set GOARCH=arm64
 set CGO_ENABLED=0
-go build -o deployer-mac ./deployer/main.go
+go build -o deployer-mac ./deployer-src/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando deployer-mac
     exit /b 1
@@ -37,7 +37,7 @@ echo [OK] deployer-mac creado
 
 echo.
 echo [3/5] Compilando Nexo (VPS Windows)...
-go build -o nexo.exe ./nexo/main.go
+go build -o nexo.exe ./nexo-src/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando nexo
     exit /b 1
@@ -46,14 +46,10 @@ echo [OK] nexo.exe creado
 
 echo.
 echo [4/5] Compilando Updater (Mac ARM64)...
-if exist updater-mac\main (
-    del /F /Q updater-mac\main
-    rmdir updater-mac
-)
 set GOOS=darwin
 set GOARCH=arm64
 set CGO_ENABLED=0
-go build -o updater-mac ./updater-mac/main.go
+go build -o updater-mac ./updater-src/main.go
 if %errorlevel% neq 0 (
     echo [ERROR] Fallo compilando updater-mac
     exit /b 1
@@ -67,7 +63,7 @@ echo.
 echo [5/5] Generando claves Ed25519 (si no existen)...
 if not exist deploy-private.key (
     echo Generando nuevo par de claves...
-    go run ./keys/genkeys.go
+    go run ./keys-src/genkeys.go
     if %errorlevel% neq 0 (
         echo [AVISO] No se pudieron generar claves automaticamente
         echo Usa: openssl genpkey -algorithm Ed25519 -out deploy-private.key

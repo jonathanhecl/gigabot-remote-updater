@@ -33,5 +33,7 @@ go.work.sum
 # .vscode/
 
 # Build scripts
-deploter-mac
+deployer-mac
 updater-mac
+
+
