@@ -27,12 +27,20 @@ Compila Gigabot para Mac (arm64), lo firma con Ed25519 y lo sube al VPS.
 
 **Uso:**
 ```bash
-# Desde la raíz del proyecto
-go build -o deployer.exe ./deployer-src/main.go
+# Desde la raíz del proyecto (ya compilado con build-all.bat)
+.\deployer.exe https://TU-VPS:8443 TU-TOKEN deploy-private.key
 
-# Ejecutar deploy
-.\deployer.exe https://tu-vps.com:8443 TU-TOKEN deploy-private.key
+# Ejemplo con IP:
+.\deployer.exe https://203.0.113.10:8443 mi-token-secreto deploy-private.key
+
+# Ejemplo con dominio:
+.\deployer.exe https://mi-vps.ejemplo.com:8443 mi-token-secreto deploy-private.key
 ```
+
+**Parámetros:**
+- `https://TU-VPS:8443` - URL del servidor Nexo (reemplazar TU-VPS con tu IP o dominio)
+- `TU-TOKEN` - Token de autenticación (mismo que configuraste en config.json del VPS)
+- `deploy-private.key` - Archivo con la clave privada Ed25519
 
 ### 2. Nexo (VPS Windows)
 Servidor HTTP que recibe binarios, valida firma Ed25519 + checksum, y sirve actualizaciones.
@@ -263,10 +271,10 @@ Cuando quieras actualizar Gigabot en el Mac:
 
 ```bash
 # Desde tu máquina de desarrollo Windows
-.\deployer.exe https://tu-vps:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
+.\deployer.exe https://TU-VPS:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
 
 # Desde tu máquina de desarrollo Mac
-./deployer-mac https://tu-vps:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
+./deployer-mac https://TU-VPS:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
 ```
 
 El Mac automáticamente:
