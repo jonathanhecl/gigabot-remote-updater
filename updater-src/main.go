@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -298,41 +299,75 @@ func (u *Updater) stopGigabot() error {
 }
 
 func parsePublicKey(publicKeyPEM []byte) (ed25519.PublicKey, error) {
-	beginIdx := -1
-	endIdx := -1
-
-	for i := 0; i < len(publicKeyPEM)-26; i++ {
-		if string(publicKeyPEM[i:i+26]) == "-----BEGIN PUBLIC KEY-----" {
-			beginIdx = i + 26
-		}
-		if string(publicKeyPEM[i:i+24]) == "-----END PUBLIC KEY-----" {
-			endIdx = i
-		}
+	// Eliminar BOM si existe
+	if len(publicKeyPEM) >= 3 && publicKeyPEM[0] == 0xEF && publicKeyPEM[1] == 0xBB && publicKeyPEM[2] == 0xBF {
+		publicKeyPEM = publicKeyPEM[3:]
 	}
+
+	// Buscar los headers PEM
+	beginMarker := "-----BEGIN PUBLIC KEY-----"
+	endMarker := "-----END PUBLIC KEY-----"
+
+	beginIdx := strings.Index(string(publicKeyPEM), beginMarker)
+	endIdx := strings.Index(string(publicKeyPEM), endMarker)
+
+	var keyData string
 
 	if beginIdx != -1 && endIdx != -1 && beginIdx < endIdx {
-		publicKeyPEM = publicKeyPEM[beginIdx:endIdx]
+		// Extraer entre los markers
+		start := beginIdx + len(beginMarker)
+		keyData = string(publicKeyPEM[start:endIdx])
+	} else {
+		// Si no hay markers PEM, usar todo el contenido
+		keyData = string(publicKeyPEM)
 	}
 
-	clean := ""
-	for _, c := range string(publicKeyPEM) {
-		if c != ' ' && c != '\n' && c != '\r' && c != '\t' {
-			clean += string(c)
+	// Limpiar: quitar espacios, saltos de línea, tabs, carriage returns
+	clean := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\n' || r == '\r' || r == '\t' {
+			return -1
 		}
+		return r
+	}, keyData)
+
+	// Debug: mostrar primeros 50 caracteres
+	preview := clean
+	if len(preview) > 50 {
+		preview = preview[:50]
+	}
+	fmt.Printf("Debug - Limpiando clave, preview: %s...\n", preview)
+	fmt.Printf("Debug - Longitud después de limpiar: %d\n", len(clean))
+
+	if len(clean) == 0 {
+		return nil, fmt.Errorf("clave pública vacía después de limpiar")
 	}
 
 	keyBytes, err := base64.StdEncoding.DecodeString(clean)
 	if err != nil {
-		return nil, fmt.Errorf("error decodificando base64: %w", err)
+		// Intentar con URL encoding alternativo
+		keyBytes, err = base64.URLEncoding.DecodeString(clean)
+		if err != nil {
+			return nil, fmt.Errorf("error decodificando base64: %w (primeros chars: %q)", err, clean[:min(20, len(clean))])
+		}
 	}
+
+	fmt.Printf("Debug - Bytes decodificados: %d\n", len(keyBytes))
 
 	if len(keyBytes) == 32 {
 		return ed25519.PublicKey(keyBytes), nil
 	}
 
 	if len(keyBytes) > 32 {
+		// Algunas claves PEM incluyen metadata adicional, tomar los últimos 32 bytes
 		return ed25519.PublicKey(keyBytes[len(keyBytes)-32:]), nil
 	}
 
-	return nil, fmt.Errorf("clave pública inválida: %d bytes", len(keyBytes))
+	return nil, fmt.Errorf("clave pública inválida: %d bytes (esperado 32)", len(keyBytes))
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
