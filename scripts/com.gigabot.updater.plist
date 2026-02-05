@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.gigabot.updater</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/USERNAME/gigabot/start-gigabot.sh</string>
+        <string>https://tu-vps:8443</string>
+        <string>deploy-public.key</string>
+        <string>./gigabot</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/USERNAME/gigabot</string>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/USERNAME/gigabot/logs/updater.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/USERNAME/gigabot/logs/updater-error.log</string>
+</dict>
+</plist>

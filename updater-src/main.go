@@ -30,10 +30,10 @@ type Metadata struct {
 }
 
 type Updater struct {
-	config       Config
-	publicKey    ed25519.PublicKey
-	currentVer   string
-	gigabotCmd   *exec.Cmd
+	config     Config
+	publicKey  ed25519.PublicKey
+	currentVer string
+	gigabotCmd *exec.Cmd
 }
 
 func main() {
@@ -88,13 +88,13 @@ func (u *Updater) run() error {
 
 		if !needsUpdate {
 			fmt.Printf("Versión actual (%s) es la última. Esperando...\n", u.currentVer)
-			
+
 			if u.gigabotCmd == nil || (u.gigabotCmd.ProcessState != nil && u.gigabotCmd.ProcessState.Exited()) {
 				if err := u.startGigabot(); err != nil {
 					fmt.Printf("Error iniciando Gigabot: %v\n", err)
 				}
 			}
-			
+
 			time.Sleep(u.config.CheckInterval)
 			continue
 		}
@@ -109,7 +109,7 @@ func (u *Updater) run() error {
 
 		u.currentVer = metadata.Version
 		fmt.Printf("Actualización a %s completada exitosamente\n", metadata.Version)
-		
+
 		time.Sleep(u.config.CheckInterval)
 	}
 }
@@ -147,9 +147,9 @@ func (u *Updater) checkUpdate() (bool, *Metadata, error) {
 
 func (u *Updater) downloadAndUpdate(metadata *Metadata) error {
 	tempPath := filepath.Join(u.config.TempDir, "gigabot-new")
-	
+
 	fmt.Printf("Descargando nueva versión a %s...\n", tempPath)
-	
+
 	resp, err := http.Get(u.config.VpsHost + "/download")
 	if err != nil {
 		return fmt.Errorf("error descargando: %w", err)
@@ -186,54 +186,77 @@ func (u *Updater) downloadAndUpdate(metadata *Metadata) error {
 		return fmt.Errorf("error guardando archivo temporal: %w", err)
 	}
 
-	fmt.Println("Deteniendo Gigabot actual...")
-	if err := u.stopGigabot(); err != nil {
-		fmt.Printf("Advertencia: error deteniendo Gigabot: %v\n", err)
-	}
+	// Verificar si existe el binario actual
+	_, err = os.Stat(u.config.GigabotPath)
+	gigabotExists := err == nil
 
-	time.Sleep(2 * time.Second)
+	if gigabotExists {
+		// Flujo de actualización: detener, backup, reemplazar
+		fmt.Println("Deteniendo Gigabot actual...")
+		if err := u.stopGigabot(); err != nil {
+			fmt.Printf("Advertencia: error deteniendo Gigabot: %v\n", err)
+		}
 
-	backupPath := u.config.GigabotPath + ".backup"
-	if _, err := os.Stat(u.config.GigabotPath); err == nil {
+		time.Sleep(2 * time.Second)
+
+		backupPath := u.config.GigabotPath + ".backup"
 		if err := os.Rename(u.config.GigabotPath, backupPath); err != nil {
 			return fmt.Errorf("error haciendo backup: %w", err)
 		}
+
+		if err := os.Rename(tempPath, u.config.GigabotPath); err != nil {
+			os.Rename(backupPath, u.config.GigabotPath)
+			return fmt.Errorf("error reemplazando binario: %w", err)
+		}
+
+		exec.Command("xattr", "-c", u.config.GigabotPath).Run()
+		fmt.Println("Binario reemplazado exitosamente")
+
+		if err := u.startGigabot(); err != nil {
+			os.Remove(u.config.GigabotPath)
+			os.Rename(backupPath, u.config.GigabotPath)
+			return fmt.Errorf("error iniciando nueva versión, rollback realizado: %w", err)
+		}
+
+		os.Remove(backupPath)
+	} else {
+		// Primera instalación: simplemente mover, poner +x y ejecutar
+		fmt.Println("Gigabot no existe, realizando primera instalación...")
+
+		if err := os.Rename(tempPath, u.config.GigabotPath); err != nil {
+			return fmt.Errorf("error guardando binario: %w", err)
+		}
+
+		// Asegurar permisos ejecutables
+		if err := os.Chmod(u.config.GigabotPath, 0755); err != nil {
+			fmt.Printf("Advertencia: error poniendo permisos ejecutables: %v\n", err)
+		}
+
+		exec.Command("xattr", "-c", u.config.GigabotPath).Run()
+		fmt.Println("Binario instalado exitosamente")
+
+		if err := u.startGigabot(); err != nil {
+			return fmt.Errorf("error iniciando Gigabot: %w", err)
+		}
 	}
-
-	if err := os.Rename(tempPath, u.config.GigabotPath); err != nil {
-		os.Rename(backupPath, u.config.GigabotPath)
-		return fmt.Errorf("error reemplazando binario: %w", err)
-	}
-
-	exec.Command("xattr", "-c", u.config.GigabotPath).Run()
-
-	fmt.Println("Binario reemplazado exitosamente")
-
-	if err := u.startGigabot(); err != nil {
-		os.Remove(u.config.GigabotPath)
-		os.Rename(backupPath, u.config.GigabotPath)
-		return fmt.Errorf("error iniciando nueva versión, rollback realizado: %w", err)
-	}
-
-	os.Remove(backupPath)
 
 	return nil
 }
 
 func (u *Updater) startGigabot() error {
 	fmt.Printf("Iniciando Gigabot: %s\n", u.config.GigabotPath)
-	
+
 	cmd := exec.Command(u.config.GigabotPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error iniciando proceso: %w", err)
 	}
 
 	u.gigabotCmd = cmd
 	fmt.Printf("Gigabot iniciado con PID %d\n", cmd.Process.Pid)
-	
+
 	go func() {
 		if err := cmd.Wait(); err != nil {
 			fmt.Printf("Gigabot terminó con error: %v\n", err)
@@ -252,7 +275,7 @@ func (u *Updater) stopGigabot() error {
 	}
 
 	fmt.Printf("Enviando señal de terminación a PID %d...\n", u.gigabotCmd.Process.Pid)
-	
+
 	if err := u.gigabotCmd.Process.Signal(os.Interrupt); err != nil {
 		u.gigabotCmd.Process.Kill()
 	}
@@ -277,7 +300,7 @@ func (u *Updater) stopGigabot() error {
 func parsePublicKey(publicKeyPEM []byte) (ed25519.PublicKey, error) {
 	beginIdx := -1
 	endIdx := -1
-	
+
 	for i := 0; i < len(publicKeyPEM)-26; i++ {
 		if string(publicKeyPEM[i:i+26]) == "-----BEGIN PUBLIC KEY-----" {
 			beginIdx = i + 26
@@ -286,30 +309,30 @@ func parsePublicKey(publicKeyPEM []byte) (ed25519.PublicKey, error) {
 			endIdx = i
 		}
 	}
-	
+
 	if beginIdx != -1 && endIdx != -1 && beginIdx < endIdx {
 		publicKeyPEM = publicKeyPEM[beginIdx:endIdx]
 	}
-	
+
 	clean := ""
 	for _, c := range string(publicKeyPEM) {
 		if c != ' ' && c != '\n' && c != '\r' && c != '\t' {
 			clean += string(c)
 		}
 	}
-	
+
 	keyBytes, err := base64.StdEncoding.DecodeString(clean)
 	if err != nil {
 		return nil, fmt.Errorf("error decodificando base64: %w", err)
 	}
-	
+
 	if len(keyBytes) == 32 {
 		return ed25519.PublicKey(keyBytes), nil
 	}
-	
+
 	if len(keyBytes) > 32 {
 		return ed25519.PublicKey(keyBytes[len(keyBytes)-32:]), nil
 	}
-	
+
 	return nil, fmt.Errorf("clave pública inválida: %d bytes", len(keyBytes))
 }
