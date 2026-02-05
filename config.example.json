@@ -1,0 +1,6 @@
+{
+  "token": "tu-token-ultra-secreto-minimo-32-caracteres",
+  "public_key_path": "deploy-public.key",
+  "port": "8443",
+  "storage_dir": "./storage"
+}
