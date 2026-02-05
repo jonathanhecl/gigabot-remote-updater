@@ -11,32 +11,51 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 )
 
 type Config struct {
-	VpsHost    string
-	Token      string
-	PrivateKey string
+	VpsHost     string
+	Token       string
+	PrivateKey  string
 	ProjectPath string
-	BinaryName string
+	BinaryName  string
 }
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Println("Uso: deployer <vps-host> <token> <private-key-file>")
+		fmt.Println("Uso: deployer <vps-host> <token> <private-key-file> [project-path]")
 		fmt.Println("Ejemplo: deployer https://tu-vps.com:8443 mi-token-secreto deploy-private.key")
+		fmt.Println("         deployer https://tu-vps.com:8443 mi-token-secreto deploy-private.key C:\\proyectos\\gigabot")
 		os.Exit(1)
+	}
+
+	// Detectar directorio del ejecutable (donde está deployer.exe)
+	execPath, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error detectando ruta del ejecutable: %v\n", err)
+		os.Exit(1)
+	}
+	execDir := filepath.Dir(execPath)
+
+	// Usar parámetro opcional o el directorio del ejecutable
+	projectPath := execDir
+	if len(os.Args) >= 5 {
+		projectPath = os.Args[4]
 	}
 
 	config := Config{
 		VpsHost:     os.Args[1],
 		Token:       os.Args[2],
 		PrivateKey:  os.Args[3],
-		ProjectPath: ".",
+		ProjectPath: projectPath,
 		BinaryName:  "gigabot-mac",
 	}
+
+	fmt.Printf("Deployer desde: %s\n", execDir)
+	fmt.Printf("Proyecto a compilar: %s\n", config.ProjectPath)
 
 	if err := run(config); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -59,22 +78,35 @@ func run(config Config) error {
 
 	// Compilar para Mac M4 (arm64)
 	binaryPath := filepath.Join(config.ProjectPath, config.BinaryName)
-	
-	// Usar go build con cross-compilation
-	buildCmd := fmt.Sprintf("cd %s && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags '-X main.BuildTime=%s -X main.Version=%s' -o %s cmd/gigabot/main.go", 
-		config.ProjectPath, buildTime, version, config.BinaryName)
-	
-	fmt.Printf("Ejecutando: %s\n", buildCmd)
-	
-	// Por ahora, asumimos que el binario ya existe o lo compilamos externamente
-	// En producción, esto ejecutaría el comando
-	
+
+	// Ejecutar go build con cross-compilation
+	cmd := exec.Command("go", "build",
+		"-ldflags", fmt.Sprintf("-X main.BuildTime=%s -X main.Version=%s", buildTime, version),
+		"-o", config.BinaryName,
+		"cmd/gigabot/main.go")
+	cmd.Dir = config.ProjectPath
+	cmd.Env = append(os.Environ(),
+		"GOOS=darwin",
+		"GOARCH=arm64",
+		"CGO_ENABLED=0",
+	)
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	fmt.Printf("Ejecutando: go build -ldflags '...' -o %s cmd/gigabot/main.go\n", config.BinaryName)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error compilando: %w", err)
+	}
+
+	fmt.Println("Compilación exitosa!")
+
 	// Calcular checksum
 	binaryData, err := os.ReadFile(binaryPath)
 	if err != nil {
 		return fmt.Errorf("no se puede leer el binario: %w", err)
 	}
-	
+
 	checksum := sha256.Sum256(binaryData)
 	checksumHex := fmt.Sprintf("%x", checksum)
 	fmt.Printf("Checksum: %s\n", checksumHex)
@@ -88,11 +120,11 @@ func run(config Config) error {
 
 	// Preparar metadata
 	metadata := map[string]string{
-		"version":   version,
+		"version":    version,
 		"build_time": buildTime,
-		"checksum":  checksumHex,
-		"platform":  "darwin/arm64",
-		"signature": base64.StdEncoding.EncodeToString(signature),
+		"checksum":   checksumHex,
+		"platform":   "darwin/arm64",
+		"signature":  base64.StdEncoding.EncodeToString(signature),
 	}
 
 	metadataJSON, _ := json.Marshal(metadata)
@@ -115,7 +147,7 @@ func run(config Config) error {
 	if err != nil {
 		return fmt.Errorf("error creando form file: %w", err)
 	}
-	
+
 	_, err = io.Copy(part, bytes.NewReader(binaryData))
 	if err != nil {
 		return fmt.Errorf("error copiando archivo: %w", err)
@@ -154,40 +186,40 @@ func run(config Config) error {
 func signBinary(privateKeyPEM []byte, data []byte) ([]byte, error) {
 	// Parsear la clave privada Ed25519 desde formato PEM
 	// El formato es: -----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----
-	
+
 	// Extraer la parte base64 del PEM
 	start := bytes.Index(privateKeyPEM, []byte("-----BEGIN PRIVATE KEY-----"))
 	end := bytes.Index(privateKeyPEM, []byte("-----END PRIVATE KEY-----"))
-	
+
 	if start == -1 || end == -1 {
 		return nil, fmt.Errorf("formato PEM inválido")
 	}
-	
+
 	// Extraer solo la parte base64
 	base64Data := privateKeyPEM[start+27 : end]
 	// Limpiar newlines y espacios
 	base64Data = bytes.ReplaceAll(base64Data, []byte("\n"), []byte{})
 	base64Data = bytes.ReplaceAll(base64Data, []byte("\r"), []byte{})
-	
+
 	privateKeyBytes, err := base64.StdEncoding.DecodeString(string(base64Data))
 	if err != nil {
 		return nil, fmt.Errorf("error decodificando base64: %w", err)
 	}
-	
+
 	// Para Ed25519 en formato PKCS#8, necesitamos extraer la clave privada
 	// El formato DER contiene: version (1) + algorithm identifier + private key octet string
 	// La clave Ed25519 tiene 32 bytes
-	
+
 	// Buscar la clave privada en el DER (últimos 32 bytes para Ed25519)
 	if len(privateKeyBytes) < 32 {
 		return nil, fmt.Errorf("clave privada demasiado corta")
 	}
-	
+
 	// Los últimos 32 bytes son la clave privada Ed25519
 	seed := privateKeyBytes[len(privateKeyBytes)-32:]
-	
+
 	privateKey := ed25519.NewKeyFromSeed(seed)
 	signature := ed25519.Sign(privateKey, data)
-	
+
 	return signature, nil
 }
