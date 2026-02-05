@@ -83,7 +83,8 @@ func (u *Updater) run() error {
 		needsUpdate, metadata, err := u.checkUpdate()
 		if err != nil {
 			fmt.Printf("Error chequeando actualización: %v\n", err)
-			time.Sleep(u.config.CheckInterval)
+			fmt.Println("Reintentando en 1 minuto...")
+			time.Sleep(1 * time.Minute)
 			continue
 		}
 
