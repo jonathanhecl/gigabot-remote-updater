@@ -45,42 +45,41 @@ chmod +x updater-mac gigabot
 **Ubicación:** Tu PC Windows donde compilas
 **Archivos necesarios:**
 ```
-updater/
+gigabot-remote-updater/
 ├── deployer.exe         # Ejecutable precompilado para Windows
 └── deploy-private.key   # Clave privada (¡nunca compartir!)
 ```
 
 **Para subir una actualización:**
 ```bash
-cd updater
+cd gigabot-remote-updater
 .\deployer.exe https://tu-vps:8443 TU-TOKEN deploy-private.key
 ```
 
 ---
 
-### 🍎 Máquina de Desarrollo Mac M1
-**Ubicación:** Tu Mac M1 donde compilas
+### 🍎 Máquina de Desarrollo Mac M1/M2/M3/M4
+**Ubicación:** Tu Mac donde compilas
 **Archivos necesarios:**
 ```
-updater/
-├── deployer             # Lo compilas tú (ver abajo)
+gigabot-remote-updater/
+├── deployer-mac         # Lo compilas tú (ver abajo)
 └── deploy-private.key   # Clave privada (¡nunca compartir!)
 ```
 
-**Compilar deployer en Mac M1 (una sola vez):**
+**Compilar deployer en Mac (una sola vez):**
 ```bash
-cd updater/deployer
-go build -o ../deployer main.go
-cd ..
+cd gigabot-remote-updater
+./build-all.sh
 ```
 
 **Para subir una actualización:**
 ```bash
-cd updater
-./deployer https://tu-vps:8443 TU-TOKEN deploy-private.key
+cd gigabot-remote-updater
+./deployer-mac https://tu-vps:8443 TU-TOKEN deploy-private.key
 ```
 
-**Nota:** Si compiles desde Mac M1, el deployer automáticamente compila para Mac M4 (arm64) y lo sube al VPS.
+**Nota:** Si compilas desde Mac, el deployer-mac automáticamente compila para Mac ARM64 y lo sube al VPS.
 
 ---
 
@@ -108,9 +107,11 @@ chmod +x ~/gigabot/*
 
 ### 3. Subir Actualizaciones (cuando quieras actualizar)
 ```bash
-# Desde tu máquina de desarrollo (Windows o Mac M1)
-# El deployer compila gigabot para Mac M4, lo firma y lo sube al VPS
-./deployer https://tu-vps:8443 TU-TOKEN-SECRETO deploy-private.key
+# Desde tu máquina de desarrollo (Windows o Mac)
+# El deployer compila gigabot para Mac, lo firma y lo sube al VPS
+./deployer-mac https://tu-vps:8443 TU-TOKEN-SECRETO deploy-private.key   # En Mac
+# o
+.\deployer.exe https://tu-vps:8443 TU-TOKEN-SECRETO deploy-private.key  # En Windows
 ```
 
 El Mac M4 automáticamente detectará la nueva versión en ~5 minutos y se actualizará solo.

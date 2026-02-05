@@ -5,14 +5,17 @@ Sistema de actualización remota para Gigabot: compila en Windows/Mac → sube a
 **Arquitectura:** 3 apps standalone que no modifican el proyecto Gigabot original.
 
 ```
-gigabot/
-├── cmd/gigabot/           # ← Tu proyecto (intacto)
-├── internal/              # ← Tu proyecto (intacto)
-└── updater/               # ← Este sistema (nuevo)
-    ├── deployer/          # App Windows: compila + sube al VPS
-    ├── nexo/              # App VPS: recibe + valida binarios
-    ├── updater-mac/       # App Mac: descarga + reinicia gigabot
-    └── build-all.bat      # Script para compilar todo
+gigabot-remote-updater/
+├── deployer-src/          # Código fuente del deployer
+├── nexo-src/              # Código fuente del servidor VPS
+├── updater-src/           # Código fuente del updater para Mac
+├── keys-src/              # Generador de claves Ed25519
+├── build-all.bat          # Script para compilar todo (Windows)
+├── build-all.sh           # Script para compilar todo (Mac/Linux)
+├── deployer.exe           # Binario Windows (generado)
+├── deployer-mac           # Binario Mac (generado)
+├── nexo.exe               # Binario VPS Windows (generado)
+└── updater-mac            # Binario Mac (generado)
 ```
 
 ---
@@ -24,12 +27,11 @@ Compila Gigabot para Mac (arm64), lo firma con Ed25519 y lo sube al VPS.
 
 **Uso:**
 ```bash
-# Compilar deployer
-cd updater\deployer
-go build -o deployer.exe main.go
+# Desde la raíz del proyecto
+go build -o deployer.exe ./deployer-src/main.go
 
 # Ejecutar deploy
-deployer.exe https://tu-vps.com:8443 TU-TOKEN deploy-private.key
+.\deployer.exe https://tu-vps.com:8443 TU-TOKEN deploy-private.key
 ```
 
 ### 2. Nexo (VPS Windows)
@@ -174,8 +176,10 @@ Ahora el updater se inicia automáticamente cuando enciendes el Mac.
 
 **Opción A - Automática (desde este directorio):**
 ```bash
-cd updater/keys
-go run genkeys.go
+cd gigabot-remote-updater
+./build-all.sh        # En Mac/Linux
+# o
+.\build-all.bat       # En Windows
 ```
 
 **Opción B - OpenSSL (recomendado para producción):**
@@ -191,14 +195,17 @@ Copia `deploy-public.key` al VPS y al Mac.
 
 Desde la raíz del proyecto:
 ```bash
-cd updater
-build-all.bat
+cd gigabot-remote-updater
+.\build-all.bat       # En Windows
+# o
+./build-all.sh        # En Mac/Linux
 ```
 
 Esto genera:
-- `deployer.exe` - Para subir actualizaciones
-- `nexo.exe` - Para el VPS
-- `updater-mac` - Para el Mac (compilado para arm64)
+- `deployer.exe`   - Para subir actualizaciones (Windows)
+- `deployer-mac`   - Para subir actualizaciones (Mac)
+- `nexo.exe`       - Para el VPS Windows
+- `updater-mac`    - Para el Mac (compilado para arm64)
 
 ### Paso 3: Instalar en VPS Windows
 
@@ -255,8 +262,11 @@ launchctl load ~/Library/LaunchAgents/com.gigabot.updater.plist
 Cuando quieras actualizar Gigabot en el Mac:
 
 ```bash
-# Desde tu máquina de desarrollo (Windows o Mac)
-deployer.exe https://tu-vps:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
+# Desde tu máquina de desarrollo Windows
+.\deployer.exe https://tu-vps:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
+
+# Desde tu máquina de desarrollo Mac
+./deployer-mac https://tu-vps:8443 TU-TOKEN-SUPER-SECRETO deploy-private.key
 ```
 
 El Mac automáticamente:
@@ -295,7 +305,7 @@ xattr -c ~/gigabot/updater-mac
 
 ## Notas de Desarrollo
 
-- El deployer automáticamente compila con `GOOS=darwin GOARCH=arm64`
+- El deployer compila automáticamente con `GOOS=darwin GOARCH=arm64`
 - El updater usa polling cada 5 minutos (modificable en código)
 - Cada versión es identificada por timestamp: `YYYYMMDD-HHMMSS`
 - Rollback automático si la nueva versión no inicia
