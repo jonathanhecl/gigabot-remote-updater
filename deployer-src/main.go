@@ -22,13 +22,27 @@ type Config struct {
 	PrivateKey  string
 	ProjectPath string
 	BinaryName  string
+	MainPath    string // Path al main.go (ej: cmd/gigabot/main.go)
 }
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Println("Uso: deployer <vps-host> <token> <private-key-file> [project-path]")
-		fmt.Println("Ejemplo: deployer https://tu-vps.com:8443 mi-token-secreto deploy-private.key")
-		fmt.Println("         deployer https://tu-vps.com:8443 mi-token-secreto deploy-private.key C:\\proyectos\\gigabot")
+		fmt.Println("Uso: deployer <vps-host> <token> <private-key-file> [project-path] [main.go-path] [binary-name]")
+		fmt.Println("")
+		fmt.Println("Parámetros obligatorios:")
+		fmt.Println("  vps-host        URL del VPS (ej: https://vps.ejemplo.com:8443)")
+		fmt.Println("  token           Token de autenticación")
+		fmt.Println("  private-key     Archivo de clave privada (deploy-private.key)")
+		fmt.Println("")
+		fmt.Println("Parámetros opcionales:")
+		fmt.Println("  project-path    Ruta al proyecto (default: directorio del deployer)")
+		fmt.Println("  main.go-path    Ruta al main.go (default: cmd/gigabot/main.go)")
+		fmt.Println("  binary-name     Nombre del binario resultante (default: gigabot-mac)")
+		fmt.Println("")
+		fmt.Println("Ejemplos:")
+		fmt.Println("  deployer https://vps.com:8443 token deploy-private.key")
+		fmt.Println("  deployer https://vps.com:8443 token deploy-private.key C:\\proyectos\\gigabot")
+		fmt.Println("  deployer https://vps.com:8443 token deploy-private.key . cmd/server/main.go server-mac")
 		os.Exit(1)
 	}
 
@@ -40,10 +54,20 @@ func main() {
 	}
 	execDir := filepath.Dir(execPath)
 
-	// Usar parámetro opcional o el directorio del ejecutable
+	// Parámetros opcionales con defaults
 	projectPath := execDir
 	if len(os.Args) >= 5 {
 		projectPath = os.Args[4]
+	}
+
+	mainPath := "cmd/gigabot/main.go"
+	if len(os.Args) >= 6 {
+		mainPath = os.Args[5]
+	}
+
+	binaryName := "gigabot-mac"
+	if len(os.Args) >= 7 {
+		binaryName = os.Args[6]
 	}
 
 	config := Config{
@@ -51,11 +75,13 @@ func main() {
 		Token:       os.Args[2],
 		PrivateKey:  os.Args[3],
 		ProjectPath: projectPath,
-		BinaryName:  "gigabot-mac",
+		BinaryName:  binaryName,
+		MainPath:    mainPath,
 	}
 
 	fmt.Printf("Deployer desde: %s\n", execDir)
-	fmt.Printf("Proyecto a compilar: %s\n", config.ProjectPath)
+	fmt.Printf("Proyecto: %s\n", config.ProjectPath)
+	fmt.Printf("Compilando: %s -> %s\n", config.MainPath, config.BinaryName)
 
 	if err := run(config); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -83,7 +109,7 @@ func run(config Config) error {
 	cmd := exec.Command("go", "build",
 		"-ldflags", fmt.Sprintf("-X main.BuildTime=%s -X main.Version=%s", buildTime, version),
 		"-o", config.BinaryName,
-		"cmd/gigabot/main.go")
+		config.MainPath)
 	cmd.Dir = config.ProjectPath
 	cmd.Env = append(os.Environ(),
 		"GOOS=darwin",
